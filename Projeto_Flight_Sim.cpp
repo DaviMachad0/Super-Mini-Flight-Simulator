@@ -46,6 +46,9 @@ const int maxIndices = maxPilhas * maxFatias * 6;
 unsigned char* mapaAltura = NULL;
 int mapaLarg = 0;
 int mapaAlt = 0;
+
+GLuint texturaPlaneta = 0;
+GLuint texturaSol = 0;
 float relevoMax = 0.0f;
 float relevoSuave = 0.0f;
 float altitude         = 0.0f;
@@ -109,6 +112,30 @@ bool carregarMapaAltura(const char* arquivo) {
         std::cerr << "Erro ao carregar " << arquivo << "\n";
         return false;
     }
+    return true;
+}
+
+// Carrega uma imagem de arquivo e cria uma textura OpenGL a partir dela
+bool carregarTextura(const char* arquivo, GLuint& idTextura) {
+    int largura, altura, canais;
+    unsigned char* dados = stbi_load(arquivo, &largura, &altura, &canais, 0);
+    if (!dados) {
+        std::cerr << "Erro ao carregar " << arquivo << "\n";
+        return false;
+    }
+
+    GLenum formato = (canais == 4) ? GL_RGBA : GL_RGB;
+
+    glGenTextures(1, &idTextura);
+    glBindTexture(GL_TEXTURE_2D, idTextura);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    gluBuild2DMipmaps(GL_TEXTURE_2D, formato, largura, altura, formato, GL_UNSIGNED_BYTE, dados);
+
+    stbi_image_free(dados);
     return true;
 }
 
@@ -293,6 +320,7 @@ void gerarEsfera(Malha& m, float raio, int fatias, int pilhas, bool usaRelevo) {
 void desenharMalha(const Malha& m) {
     glEnableClientState(GL_VERTEX_ARRAY);
     glEnableClientState(GL_NORMAL_ARRAY);
+    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 
     glVertexPointer(3, GL_FLOAT, 0, m.vertices);
     glNormalPointer(GL_FLOAT, 0, m.normais);
@@ -300,6 +328,7 @@ void desenharMalha(const Malha& m) {
 
     glDrawElements(GL_TRIANGLES, m.numIndices, GL_UNSIGNED_INT, m.indices);
 
+    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
     glDisableClientState(GL_NORMAL_ARRAY);
     glDisableClientState(GL_VERTEX_ARRAY);
 }
@@ -358,6 +387,7 @@ void iniciar(GLFWwindow* janela) {
     glEnable(GL_COLOR_MATERIAL); // glColor passa a definir o material
     glEnable(GL_NORMALIZE);
     glShadeModel(GL_SMOOTH);
+    glEnable(GL_TEXTURE_2D);
 
     float ambiente[] = {0.25f, 0.25f, 0.25f, 1.0f};
     glLightModelfv(GL_LIGHT_MODEL_AMBIENT, ambiente);
@@ -393,7 +423,8 @@ void desenhar() {
 
     // Renderização do Planeta (Esfera na origem 0,0,0)
     glPushMatrix();
-    glColor3f(0.2f, 0.5f, 0.9f);
+    glColor3f(1.0f, 1.0f, 1.0f);
+    glBindTexture(GL_TEXTURE_2D, texturaPlaneta);
     desenharMalha(malhaPlaneta);
     glPopMatrix();
 
@@ -401,7 +432,8 @@ void desenhar() {
     glDisable(GL_LIGHTING);
     glPushMatrix();
     glTranslatef(posSol[0], posSol[1], posSol[2]);
-    glColor3f(1.0f, 1.0f, 0.0f);
+    glColor3f(1.0f, 1.0f, 1.0f);
+    glBindTexture(GL_TEXTURE_2D, texturaSol);
     desenharMalha(malhaSol);
     glPopMatrix();
     glEnable(GL_LIGHTING);
@@ -449,6 +481,8 @@ int main() {
 
     stbi_set_flip_vertically_on_load(1);
     if (!carregarMapaAltura("HeightMap/altura.jpg")) return -1;
+    if (!carregarTextura("Texturas/terra.jpg", texturaPlaneta)) return -1;
+    if (!carregarTextura("Texturas/sol.jpg", texturaSol)) return -1;
 
     gerarEsfera(malhaPlaneta, raioPlaneta, 360, 180, true);
     gerarEsfera(malhaSol, 1.0f, 40, 40, false);
